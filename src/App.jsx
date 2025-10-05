@@ -93,7 +93,7 @@ function App() {
 
   const finalizeMove = (
     finalBoard,
-    { movingPiece, from, to, capturedPiece, promotedTo = null }
+    { movingPiece, from, to, capturedPiece, promotedTo = null, specialMove = null }
   ) => {
     const moveNumber = Math.floor(moveHistory.length / 2) + 1;
     const fromNotation = formatSquare(from);
@@ -103,9 +103,18 @@ function App() {
       ? `=${PIECE_SYMBOLS[promotedTo][movingPiece.color]}`
       : "";
 
+    let specialSuffix = "";
+    if (specialMove === "castle-kingside") {
+      specialSuffix = " (рокировка 0-0)";
+    } else if (specialMove === "castle-queenside") {
+      specialSuffix = " (рокировка 0-0-0)";
+    } else if (specialMove === "enPassant") {
+      specialSuffix = " (взятие на проходе)";
+    }
+
     const notation = `${moveNumber}. ${colorNameRu[movingPiece.color]} ${
       PIECE_SYMBOLS[movingPiece.type][movingPiece.color]
-    } ${fromNotation}→${toNotation}${captureSuffix}${promotionSuffix}`;
+    } ${fromNotation}→${toNotation}${captureSuffix}${promotionSuffix}${specialSuffix}`;
 
     setMoveHistory((prev) => [...prev, notation]);
 
@@ -165,15 +174,23 @@ function App() {
     if (!selected) return;
 
     const key = `${row}:${col}`;
-    if (!legalMoveMap.has(key)) return;
+    const move = legalMoveMap.get(key);
+    if (!move) return;
 
     const movingPiece = board[selected.row][selected.col];
-    const capturedPiece = board[row][col];
-    const { board: nextBoard, promotionNeeded, promotionSquare } = movePiece(
+    const {
+      board: nextBoard,
+      promotionNeeded,
+      promotionSquare,
+      capturedPiece,
+      specialMove: resultingSpecialMove,
+    } = movePiece(
       board,
       selected,
       { row, col }
     );
+
+    const specialMove = resultingSpecialMove ?? move.special ?? null;
 
     setBoard(nextBoard);
     setSelected(null);
@@ -187,6 +204,7 @@ function App() {
         from: selected,
         to: { row, col },
         capturedPiece,
+        specialMove,
       });
       setStatusMessage(
         `${colorNameRu[movingPiece.color]} достигли последней горизонтали. Выберите фигуру для превращения.`
@@ -199,12 +217,21 @@ function App() {
       from: selected,
       to: { row, col },
       capturedPiece,
+      specialMove,
     });
   };
 
   const handlePromotionChoice = (pieceType) => {
     if (!promotionDialog) return;
-    const { board: baseBoard, square, movingPiece, from, to, capturedPiece } =
+    const {
+      board: baseBoard,
+      square,
+      movingPiece,
+      from,
+      to,
+      capturedPiece,
+      specialMove,
+    } =
       promotionDialog;
 
     const promotedBoard = cloneBoard(baseBoard);
@@ -223,6 +250,7 @@ function App() {
       to,
       capturedPiece,
       promotedTo: pieceType,
+      specialMove,
     });
   };
 
