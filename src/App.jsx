@@ -3,6 +3,7 @@ import {
   BOARD_SIZE,
   createInitialBoard,
   getLegalMoves,
+  isKingInCheck,
   movePiece,
 } from "./chess/engine.js";
 
@@ -124,12 +125,38 @@ function App() {
 
     setMoveHistory((prev) => [...prev, notation]);
 
-    if (capturedPiece?.type === "king") {
-      setIsGameOver(true);
-      setStatusMessage(`${colorNameRu[movingPiece.color]} объявляют мат!`);
+    const nextColor = activeColor === "white" ? "black" : "white";
+    const opponentInCheck = isKingInCheck(nextBoard, nextColor);
+
+    let opponentHasMoves = false;
+    outer: for (let r = 0; r < BOARD_SIZE; r += 1) {
+      for (let c = 0; c < BOARD_SIZE; c += 1) {
+        const candidate = nextBoard[r][c];
+        if (!candidate || candidate.color !== nextColor) continue;
+        if (getLegalMoves(nextBoard, { row: r, col: c }).length > 0) {
+          opponentHasMoves = true;
+          break outer;
+        }
+      }
+    }
+
+    if (!opponentHasMoves) {
+      if (opponentInCheck) {
+        setIsGameOver(true);
+        setStatusMessage(`Мат! ${colorNameRu[movingPiece.color]} победили.`);
+      } else {
+        setIsGameOver(true);
+        setStatusMessage("Пат! Ничья.");
+      }
+      return;
+    }
+
+    setActiveColor(nextColor);
+    if (opponentInCheck) {
+      setStatusMessage(
+        `Шах! ${colorNameRu[nextColor]} под ударом. Ход ${colorNameRu[nextColor]}.`
+      );
     } else {
-      const nextColor = activeColor === "white" ? "black" : "white";
-      setActiveColor(nextColor);
       setStatusMessage(`Ход ${colorNameRu[nextColor]}.`);
     }
   };
