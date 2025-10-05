@@ -34,9 +34,27 @@ export const cloneBoard = (board) =>
 export const movePiece = (board, from, to) => {
   const nextBoard = cloneBoard(board);
   const piece = nextBoard[from.row][from.col];
+
   nextBoard[from.row][from.col] = null;
-  nextBoard[to.row][to.col] = piece ? { ...piece, hasMoved: true } : null;
-  return nextBoard;
+
+  if (!piece) {
+    return { board: nextBoard, promotionNeeded: false, promotionSquare: null };
+  }
+
+  nextBoard[to.row][to.col] = { ...piece, hasMoved: true };
+
+  let promotionNeeded = false;
+  let promotionSquare = null;
+
+  if (piece.type === "pawn") {
+    const promotionRow = piece.color === "white" ? 0 : BOARD_SIZE - 1;
+    if (to.row === promotionRow) {
+      promotionNeeded = true;
+      promotionSquare = { row: to.row, col: to.col, color: piece.color };
+    }
+  }
+
+  return { board: nextBoard, promotionNeeded, promotionSquare };
 };
 
 const isInsideBoard = (row, col) =>
@@ -221,7 +239,10 @@ export const getLegalMoves = (board, from) => {
   if (!piece) return [];
   const pseudoMoves = getPseudoLegalMoves(board, from);
   return pseudoMoves.filter((move) => {
-    const nextBoard = movePiece(board, from, { row: move.row, col: move.col });
+    const { board: nextBoard } = movePiece(board, from, {
+      row: move.row,
+      col: move.col,
+    });
     return !isKingInCheck(nextBoard, piece.color);
   });
 };

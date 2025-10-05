@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   BOARD_SIZE,
+  cloneBoard,
   createInitialBoard,
   getLegalMoves,
   isKingInCheck,
@@ -17,6 +18,8 @@ const PIECE_SYMBOLS = {
 };
 
 const INITIAL_TIME = 5 * 60;
+
+const PROMOTION_CHOICES = ["queen", "rook", "bishop", "knight"];
 
 const formatSquare = ({ row, col }) => `${String.fromCharCode(97 + col)}${
   BOARD_SIZE - row
@@ -51,6 +54,7 @@ function App() {
   const [timers, setTimers] = useState({ white: INITIAL_TIME, black: INITIAL_TIME });
   const [isGameOver, setIsGameOver] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Белые делают первый ход.");
+  const [promotionDialog, setPromotionDialog] = useState(null);
 
   useEffect(() => {
     if (isGameOver) return undefined;
@@ -86,54 +90,33 @@ function App() {
     return map;
   }, [legalMoves]);
 
-  const handleSquareClick = (row, col) => {
-    if (isGameOver) return;
-
-    const piece = board[row][col];
-    if (selected && selected.row === row && selected.col === col) {
-      setSelected(null);
-      setLegalMoves([]);
-      return;
-    }
-
-    if (piece && piece.color === activeColor) {
-      setSelected({ row, col });
-      setLegalMoves(getLegalMoves(board, { row, col }));
-      return;
-    }
-
-    if (!selected) return;
-
-    const key = `${row}:${col}`;
-    if (!legalMoveMap.has(key)) return;
-
-    const movingPiece = board[selected.row][selected.col];
-    const capturedPiece = board[row][col];
-    const nextBoard = movePiece(board, selected, { row, col });
-
-    setBoard(nextBoard);
-    setSelected(null);
-    setLegalMoves([]);
-
+  const finalizeMove = (
+    finalBoard,
+    { movingPiece, from, to, capturedPiece, promotedTo = null }
+  ) => {
     const moveNumber = Math.floor(moveHistory.length / 2) + 1;
-    const fromNotation = formatSquare(selected);
-    const toNotation = formatSquare({ row, col });
+    const fromNotation = formatSquare(from);
+    const toNotation = formatSquare(to);
     const captureSuffix = capturedPiece ? " ×" : "";
+    const promotionSuffix = promotedTo
+      ? `=${PIECE_SYMBOLS[promotedTo][movingPiece.color]}`
+      : "";
+
     const notation = `${moveNumber}. ${colorNameRu[movingPiece.color]} ${
       PIECE_SYMBOLS[movingPiece.type][movingPiece.color]
-    } ${fromNotation}→${toNotation}${captureSuffix}`;
+    } ${fromNotation}→${toNotation}${captureSuffix}${promotionSuffix}`;
 
     setMoveHistory((prev) => [...prev, notation]);
 
     const nextColor = activeColor === "white" ? "black" : "white";
-    const opponentInCheck = isKingInCheck(nextBoard, nextColor);
+    const opponentInCheck = isKingInCheck(finalBoard, nextColor);
 
     let opponentHasMoves = false;
     outer: for (let r = 0; r < BOARD_SIZE; r += 1) {
       for (let c = 0; c < BOARD_SIZE; c += 1) {
-        const candidate = nextBoard[r][c];
+        const candidate = finalBoard[r][c];
         if (!candidate || candidate.color !== nextColor) continue;
-        if (getLegalMoves(nextBoard, { row: r, col: c }).length > 0) {
+        if (getLegalMoves(finalBoard, { row: r, col: c }).length > 0) {
           opponentHasMoves = true;
           break outer;
         }
@@ -159,6 +142,87 @@ function App() {
     } else {
       setStatusMessage(`Ход ${colorNameRu[nextColor]}.`);
     }
+  };
+
+  const handleSquareClick = (row, col) => {
+    if (isGameOver) return;
+    if (promotionDialog) return;
+
+    const piece = board[row][col];
+    if (selected && selected.row === row && selected.col === col) {
+      setSelected(null);
+      setLegalMoves([]);
+      return;
+    }
+
+    if (piece && piece.color === activeColor) {
+      setSelected({ row, col });
+      setLegalMoves(getLegalMoves(board, { row, col }));
+      return;
+    }
+
+    if (!selected) return;
+
+    const key = `${row}:${col}`;
+    if (!legalMoveMap.has(key)) return;
+
+    const movingPiece = board[selected.row][selected.col];
+    const capturedPiece = board[row][col];
+    const { board: nextBoard, promotionNeeded, promotionSquare } = movePiece(
+      board,
+      selected,
+      { row, col }
+    );
+
+    setBoard(nextBoard);
+    setSelected(null);
+    setLegalMoves([]);
+
+    if (promotionNeeded) {
+      setPromotionDialog({
+        board: nextBoard,
+        square: promotionSquare,
+        movingPiece,
+        from: selected,
+        to: { row, col },
+        capturedPiece,
+      });
+      setStatusMessage(
+        `${colorNameRu[movingPiece.color]} достигли последней горизонтали. Выберите фигуру для превращения.`
+      );
+      return;
+    }
+
+    finalizeMove(nextBoard, {
+      movingPiece,
+      from: selected,
+      to: { row, col },
+      capturedPiece,
+    });
+  };
+
+  const handlePromotionChoice = (pieceType) => {
+    if (!promotionDialog) return;
+    const { board: baseBoard, square, movingPiece, from, to, capturedPiece } =
+      promotionDialog;
+
+    const promotedBoard = cloneBoard(baseBoard);
+    promotedBoard[square.row][square.col] = {
+      type: pieceType,
+      color: square.color,
+      hasMoved: true,
+    };
+
+    setBoard(promotedBoard);
+    setPromotionDialog(null);
+
+    finalizeMove(promotedBoard, {
+      movingPiece,
+      from,
+      to,
+      capturedPiece,
+      promotedTo: pieceType,
+    });
   };
 
   const handleNewGame = () => {
@@ -298,6 +362,35 @@ function App() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {promotionDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-emerald-500/40 bg-slate-900/90 p-6 text-center text-slate-100 shadow-xl">
+            <h3 className="text-lg font-semibold">
+              {colorNameRu[promotionDialog.square.color]} выбирают фигуру для превращения
+            </h3>
+            <p className="mt-2 text-sm text-slate-300">
+              Выберите фигуру, в которую превратится пешка на {formatSquare(promotionDialog.to)}.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              {PROMOTION_CHOICES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => handlePromotionChoice(type)}
+                  className="flex items-center justify-center gap-3 rounded-xl border border-emerald-500/50 bg-slate-950/60 px-4 py-3 text-lg font-semibold text-emerald-200 transition hover:border-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-100"
+                >
+                  <span className="text-3xl">
+                    {PIECE_SYMBOLS[type][promotionDialog.square.color]}
+                  </span>
+                  <span className="text-left text-sm uppercase tracking-wide text-slate-300">
+                    {pieceNameRu[type]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div>
