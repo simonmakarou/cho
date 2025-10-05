@@ -69,6 +69,7 @@ function App() {
         if (nextValue === 0) {
           setSelected(null);
           setLegalMoves([]);
+          setPromotionDialog(null);
           setIsGameOver(true);
           setStatusMessage(
             `${colorNameRu[activeColor]} проиграли по времени. Победа ${
@@ -229,6 +230,7 @@ function App() {
     setBoard(createInitialBoard());
     setSelected(null);
     setLegalMoves([]);
+    setPromotionDialog(null);
     setMoveHistory([]);
     setActiveColor("white");
     setTimers({ white: INITIAL_TIME, black: INITIAL_TIME });
@@ -242,6 +244,7 @@ function App() {
     const winner = colorNameRu[winnerColor];
     setSelected(null);
     setLegalMoves([]);
+    setPromotionDialog(null);
     setIsGameOver(true);
     setStatusMessage(`${colorNameRu[activeColor]} сдались. Победа ${winner}.`);
   };
@@ -250,6 +253,7 @@ function App() {
     if (isGameOver) return;
     setSelected(null);
     setLegalMoves([]);
+    setPromotionDialog(null);
     setIsGameOver(true);
     setStatusMessage("Партия завершилась ничьей по соглашению.");
   };
