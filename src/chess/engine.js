@@ -31,6 +31,14 @@ export const createInitialBoard = () => {
 export const cloneBoard = (board) =>
   board.map((row) => row.map((square) => (square ? { ...square } : null)));
 
+export const movePiece = (board, from, to) => {
+  const nextBoard = cloneBoard(board);
+  const piece = nextBoard[from.row][from.col];
+  nextBoard[from.row][from.col] = null;
+  nextBoard[to.row][to.col] = piece ? { ...piece, hasMoved: true } : null;
+  return nextBoard;
+};
+
 const isInsideBoard = (row, col) =>
   row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
 
@@ -62,7 +70,7 @@ const getSlidingMoves = (board, from, color, directions) => {
   return moves;
 };
 
-export const getLegalMoves = (board, from) => {
+const getPseudoLegalMoves = (board, from) => {
   const piece = board[from.row][from.col];
   if (!piece) return [];
   const moves = [];
@@ -174,10 +182,46 @@ export const getLegalMoves = (board, from) => {
   return moves;
 };
 
-export const movePiece = (board, from, to) => {
-  const nextBoard = cloneBoard(board);
-  const piece = nextBoard[from.row][from.col];
-  nextBoard[from.row][from.col] = null;
-  nextBoard[to.row][to.col] = piece ? { ...piece, hasMoved: true } : null;
-  return nextBoard;
+export const isKingInCheck = (board, color) => {
+  let kingPosition = null;
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let col = 0; col < BOARD_SIZE; col += 1) {
+      const piece = board[row][col];
+      if (piece && piece.type === "king" && piece.color === color) {
+        kingPosition = { row, col };
+        break;
+      }
+    }
+    if (kingPosition) break;
+  }
+
+  if (!kingPosition) return false;
+
+  const opponentColor = color === "white" ? "black" : "white";
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let col = 0; col < BOARD_SIZE; col += 1) {
+      const piece = board[row][col];
+      if (!piece || piece.color !== opponentColor) continue;
+      const moves = getPseudoLegalMoves(board, { row, col });
+      if (
+        moves.some(
+          (move) => move.row === kingPosition.row && move.col === kingPosition.col
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
+export const getLegalMoves = (board, from) => {
+  const piece = board[from.row][from.col];
+  if (!piece) return [];
+  const pseudoMoves = getPseudoLegalMoves(board, from);
+  return pseudoMoves.filter((move) => {
+    const nextBoard = movePiece(board, from, { row: move.row, col: move.col });
+    return !isKingInCheck(nextBoard, piece.color);
+  });
 };
